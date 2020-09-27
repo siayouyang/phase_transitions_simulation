@@ -12,12 +12,13 @@ import math
 
 #OptionParser
 parser = OptionParser()
-parser.add_option("--m1", dest="molecule1", default=20, type=int, help="number of molecule 1 (default=20)")
-parser.add_option("--m2", dest="molecule2", default=20, type=int, help="number of molecule 2 (default=20)")
+parser.add_option("--m1", dest="molecule1", default=45, type=int, help="number of molecule 1 (default=45)")
+parser.add_option("--m2", dest="molecule2", default=45, type=int, help="number of molecule 2 (default=45)")
 parser.add_option("-f", "--frames", dest="updates", default=10000, type=int, help="number of frames to be updated (default=10000)")
 parser.add_option("-v", "--valencies", dest="domains", default=4, type=int, help="number of domains in a molecule (valency) (default=4)")
 parser.add_option("-d", "--dimensions", dest="dimensions", default=10, type=int, help="define the volume of a whole cube (default=10)")
 parser.add_option("-o", "--output", dest="output_name", default="phase_valency.csv", help="output name, recommend csv format (default=phase_valency.csv)")
+parser.add_option("-m", "--movie", dest="movie", action="store_true", help="export a movie in mp4 format")
 (options, args) = parser.parse_args()
 
 fig = plt.figure()
@@ -28,6 +29,7 @@ updates = options.updates  #set updates(frames)
 domains = options.domains    # set the number of domains in each element(molecule)
 dimensions = options.dimensions  #eg. dimensions = 10 means 10*10*10 units cube
 output_name = options.output_name
+movie = options.movie
 
 '''''''''
 index information and location:
@@ -261,26 +263,36 @@ for iteration in range(updates+1):
             else:
                 pass
 
-    # count particles left
-    data_array = []
-    for j in range(data[0].shape[0]):
-        list = (data[iteration][j, 0:3]).tolist()
-        if list not in data_array:
-            data_array.append(list)
-    particles = len(data_array)
-    particles_list.append(particles)
-
     # number of molecules in a single complex
     data_array_2 = []
     for j in range(data[0].shape[0]):
         temp_count_molecules = []
         for k in range(data[0].shape[0]):
-            if data[iteration][j, 0:3].tolist() == data[iteration][k, 0:3].tolist() and data[iteration][j, 13:14] == data[iteration][k, 13:14]:
+            if data[iteration][j, 0:3].tolist() == data[iteration][k, 0:3].tolist() and data[iteration][j, 13:14] == data[iteration][k, 13:14] and data[iteration][j, 13:14] != 0 and data[iteration][k, 13:14] != 0:
                 temp_count_molecules.append(k)
         count_molecules = len(temp_count_molecules)
         data_array_2.append(count_molecules)
     max_complex = max(data_array_2)
+    if max_complex == 0:
+        max_complex = 1
     max_complex_list.append(max_complex)
+
+    # count particles left
+    data_array = []
+    for j in range(data[0].shape[0]):
+        list = (data[iteration][j, [0,1,2,13]]).tolist()
+        if list not in data_array:
+            data_array.append(list)
+    no_associated = []
+    for j in range(data[0].shape[0]):
+        for k in range(data[0].shape[0]):
+            if data[iteration][j, 0:3].tolist() == data[iteration][k, 0:3].tolist() and data[iteration][j, 13:14] == 0 and data[iteration][k, 13:14] == 0 and j != k:
+                data[iteration][k, 13:14] = [888]
+                no_associated.append(k)
+    no_associated_particles = len(no_associated)
+    particles = len(data_array)
+    total_particles = no_associated_particles + particles
+    particles_list.append(total_particles)
 
     # append data of current iteration
     data.append(np.array(previous_data))
@@ -330,7 +342,7 @@ def scatters(j):
         normred = float(accred / (accred + accblue))
         normblue = float(accblue / (accred + accblue))
         ax.scatter(data[j][k, 0:1], data[j][k, 1:2], data[j][k, 2:3], color=(normred, 0, normblue), s=30 * (data[j][k, 3:4]))
-    plt.suptitle("t = %d" % j + "    particles = %d" % particles_list[j] + "    the largest has %d molecules" % max_complex_list[j])
+    plt.suptitle("t = %d" % j + "   particles = %d" % particles_list[j] + "   the largest has %d molecules" % max_complex_list[j] + "   valency = %d" % domains)
     csv.write("%d"%j + ",%d"% particles_list[j] + ",%d\n"% max_complex_list[j])
 
 
@@ -343,7 +355,12 @@ def init():
     scatters(0)
     return scatters
 
-ani = animation.FuncAnimation(fig=fig, func=animate, frames=updates, init_func=init, interval=10, blit=False, repeat=False)
+ani = animation.FuncAnimation(fig=fig, func=animate, frames=updates, init_func=init, interval=1, blit=False, repeat=False)
+
+if movie:
+    plt.rcParams['animation.ffmpeg_path'] = r'D:\ffmpeg-4.3.1-2020-09-21-full_build\ffmpeg-4.3.1-2020-09-21-full_build\bin\ffmpeg.exe'
+    FFwriter = animation.FFMpegWriter(fps=10, codec="h264")
+    ani.save('Phase_Saperation.mp4', writer = FFwriter )
 
 plt.show()
 csv.close()
